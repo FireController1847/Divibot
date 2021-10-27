@@ -5,4 +5,12 @@
     <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="DSharpPlus" Version="4.2.0-nightly-01038" />
+    <PackageReference Include="DSharpPlus.CommandsNext" Version="4.2.0-nightly-01038" />
+    <PackageReference Include="DSharpPlus.Lavalink" Version="4.2.0-nightly-01038" />
+    <PackageReference Include="DSharpPlus.SlashCommands" Version="4.2.0-nightly-01038" />
+    <PackageReference Include="DSharpPlus.VoiceNext" Version="4.2.0-nightly-01038" />
+  </ItemGroup>
+
 </Project>
