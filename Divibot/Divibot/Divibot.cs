@@ -61,6 +61,7 @@ namespace Divibot {
             Commands.RegisterCommands<GeneralModule>();
             Commands.RegisterCommands<InfoModule>();
 #endif
+            Commands.RegisterCommands<OwnerModule>(debugGuild);
 
             // Handle errored slash commands
             Commands.SlashCommandErrored += OnSlashCommandErrored;
@@ -105,6 +106,9 @@ namespace Divibot {
                             content = $"It seems as though I don't have enough permissions to run this command.";
                         }
                         found = true;
+                    } else if (check is SlashRequireOwnerAttribute) {
+                        content = $"Sorry, only the owner of the bot can run this command.";
+                        found = true;
                     }
                     if (found) {
                         break;
@@ -124,6 +128,45 @@ namespace Divibot {
                 Content = content,
                 IsEphemeral = true
             });
+        }
+
+        // Divibot's definitely exclusive and totally amazing pagination feature
+        public static string Pagination(string[] lines, int page = 0) {
+            int pages = (int) Math.Ceiling((double) lines.Length / 10);
+            string output = "";
+            if (pages == 1) {
+                foreach (string line in lines) {
+                    output += line + '\n';
+                }
+            } else if (pages > 1) {
+                if (page == 0) {
+                    for (int i = 0; i < 10; i++) {
+                        output += lines[i] + '\n';
+                    }
+                } else if (page == pages - 1) {
+                    for (int i = page * 10; i < lines.Length; i++) {
+                        output += lines[i] + '\n';
+                    }
+                } else {
+                    for (int i = page * 10; i < (page * 10) + 10; i++) {
+                        output += lines[i] + '\n';
+                    }
+                }
+            }
+            return output;
+        }
+
+        // Divibot's not-as-amazing-as-pagination-but-still-totally amazing comma-separated list creation feature
+        public static string CreateCommaList(List<string> items, string combiningWord) {
+            if (items.Count == 0) {
+                return "N/A";
+            } else if (items.Count == 1) {
+                return items.First();
+            } else if (items.Count == 2) {
+                return $"{items.First()} {combiningWord} {items.Last()}";
+            } else {
+                return string.Join(", ", items.ToArray(), 0, items.Count - 1) + " " + combiningWord + " " + items.Last();
+            }
         }
 
     }
