@@ -2,6 +2,7 @@
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
+using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.SlashCommands.Attributes;
 using DSharpPlus.SlashCommands.EventArgs;
@@ -44,6 +45,9 @@ namespace Divibot {
             // Create client
             Client = Services.GetRequiredService<DiscordClient>();
 
+            // Handle ready event
+            Client.Ready += OnReady;
+
             // Add slash commands
             Commands = Client.UseSlashCommands(new SlashCommandsConfiguration() {
                 Services = Services
@@ -75,6 +79,15 @@ namespace Divibot {
 
             // Don't close immediately
             await Task.Delay(-1);
+        }
+
+        // Handle bot ready event
+        private static async Task OnReady(DiscordClient client, ReadyEventArgs evt) {
+            // Set activity
+            await Client.UpdateStatusAsync(new DiscordActivity() {
+                ActivityType = ActivityType.Playing,
+                Name = "with slash commands"
+            });
         }
 
         // Handle slash command errors

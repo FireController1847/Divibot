@@ -82,10 +82,10 @@ namespace Divibot.Commands {
             TimeSpan uptime = Divibot.Uptime.Elapsed;
             string formatString = "";
             if (uptime.Days > 0) {
-                formatString += $"d' day{(uptime.Days != 1 ? "s" : "")}'";
+                formatString += $"d' day{(uptime.Days != 1 ? "s" : "")} '";
             }
             if (uptime.Days > 0 || uptime.Hours > 0) {
-                formatString += $"h' hour{(uptime.Hours != 1 ? "s" : "")}'";
+                formatString += $"h' hour{(uptime.Hours != 1 ? "s" : "")} '";
             }
             if (uptime.Days > 0 || uptime.Hours > 0 || uptime.Minutes > 0) {
                 formatString += $"m' minute{(uptime.Minutes != 1 ? "s" : "")} and '";
