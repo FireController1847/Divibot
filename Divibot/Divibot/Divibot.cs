@@ -1,18 +1,15 @@
 ﻿using Divibot.Commands;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
-using DSharpPlus.CommandsNext.Exceptions;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.SlashCommands.Attributes;
 using DSharpPlus.SlashCommands.EventArgs;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 
 namespace Divibot {
@@ -57,9 +54,13 @@ namespace Divibot {
 #if DEBUG
             Commands.RegisterCommands<GeneralModule>(debugGuild);
             Commands.RegisterCommands<InfoModule>(debugGuild);
+            Commands.RegisterCommands<EncodeModule>(debugGuild);
+            Commands.RegisterCommands<DecodeModule>(debugGuild);
 #else
             Commands.RegisterCommands<GeneralModule>();
             Commands.RegisterCommands<InfoModule>();
+            Commands.RegisterCommands<EncodeModule>();
+            Commands.RegisterCommands<DecodeModule>();
 #endif
             Commands.RegisterCommands<OwnerModule>(debugGuild);
 
