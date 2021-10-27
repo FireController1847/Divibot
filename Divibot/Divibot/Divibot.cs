@@ -1,4 +1,5 @@
-﻿using DSharpPlus;
+﻿using Divibot.Commands;
+using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Exceptions;
 using DSharpPlus.Entities;
@@ -50,11 +51,18 @@ namespace Divibot {
             Commands = Client.UseSlashCommands(new SlashCommandsConfiguration() {
                 Services = Services
             });
+
+            // Register modules
+            ulong debugGuild = ulong.Parse(Environment.GetEnvironmentVariable("DebugGuild"));
 #if DEBUG
-            Commands.RegisterCommands(Assembly.GetExecutingAssembly(), ulong.Parse(Environment.GetEnvironmentVariable("DebugGuild")));
+            Commands.RegisterCommands<GeneralModule>(debugGuild);
+            Commands.RegisterCommands<InfoModule>(debugGuild);
 #else
-            Commands.RegisterCommands(Assembly.GetExecutingAssembly());
+            Commands.RegisterCommands<GeneralModule>();
+            Commands.RegisterCommands<InfoModule>();
 #endif
+
+            // Handle errored slash commands
             Commands.SlashCommandErrored += OnSlashCommandErrored;
 
             // Start uptime
@@ -80,6 +88,22 @@ namespace Divibot {
                         found = true;
                     } else if (check is SlashRequireDirectMessageAttribute) {
                         content = "Sorry, but this command only works inside of DMs.";
+                        found = true;
+                    } else if (check is SlashRequireUserPermissionsAttribute) {
+                        SlashRequireUserPermissionsAttribute userPermAttribute = check as SlashRequireUserPermissionsAttribute;
+                        if (evt.Context.Member != null && evt.Context.Member.Permissions.HasPermission(Permissions.ManageRoles)) {
+                            content = $"Sorry, but you do not have enough permissions to run this command. You're missing one of the following: {userPermAttribute.Permissions.ToPermissionString()}";
+                        } else {
+                            content = $"Sorry, but you do not have enough permissions to run this command.";
+                        }
+                        found = true;
+                    } else if (check is SlashRequireBotPermissionsAttribute) {
+                        SlashRequireBotPermissionsAttribute botPermAttribute = check as SlashRequireBotPermissionsAttribute;
+                        if (evt.Context.Member != null && evt.Context.Member.Permissions.HasPermission(Permissions.ManageRoles)) {
+                            content = $"It seems as though I don't have enough permissions to run this command. I'm missing one of the following: {botPermAttribute.Permissions.ToPermissionString()}";
+                        } else {
+                            content = $"It seems as though I don't have enough permissions to run this command.";
+                        }
                         found = true;
                     }
                     if (found) {

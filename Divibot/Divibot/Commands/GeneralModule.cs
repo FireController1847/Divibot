@@ -18,7 +18,6 @@ namespace Divibot.Commands {
         }
 
         [SlashCommand("ping", "Determines the amount of time it takes the bot to respond to commands.")]
-        [SlashRequireDirectMessage]
         public async Task PingAsync(InteractionContext context, [Option("message", "An optional message. Include {time} to make it fully custom.")] string message = default) {
             // Build response
             string response;
