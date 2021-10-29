@@ -1,4 +1,5 @@
 ﻿using Divibot.Commands;
+using Divibot.Database;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
@@ -6,7 +7,9 @@ using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.SlashCommands.Attributes;
 using DSharpPlus.SlashCommands.EventArgs;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -22,8 +25,6 @@ namespace Divibot {
         public static Stopwatch Uptime { get; } = new Stopwatch();
 
         // Properties
-        public static DiscordClient Client { get; private set; }
-        public static SlashCommandsExtension Commands { get; private set; }
         public static ServiceProvider Services { get; private set; }
 
         // Main
@@ -40,42 +41,60 @@ namespace Divibot {
                     });
                 })
                 .AddSingleton<Random>()
+                .AddDbContext<DivibotDbContext>(builder => {
+                    string connectionString =
+                        $"server=localhost;" +
+                        $"database={Environment.GetEnvironmentVariable("DbDatabase")};" +
+                        $"user={Environment.GetEnvironmentVariable("DbUser")};" +
+                        $"password={Environment.GetEnvironmentVariable("DbPassword")};";
+
+                    builder.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
+                })
                 .BuildServiceProvider();
 
             // Create client
-            Client = Services.GetRequiredService<DiscordClient>();
+            DiscordClient client = Services.GetRequiredService<DiscordClient>();
 
             // Handle ready event
-            Client.Ready += OnReady;
+            client.Ready += OnReady;
 
             // Add slash commands
-            Commands = Client.UseSlashCommands(new SlashCommandsConfiguration() {
+            SlashCommandsExtension commands = client.UseSlashCommands(new SlashCommandsConfiguration() {
                 Services = Services
             });
 
             // Register modules
             ulong debugGuild = ulong.Parse(Environment.GetEnvironmentVariable("DebugGuild"));
 #if DEBUG
-            Commands.RegisterCommands<GeneralModule>(debugGuild);
-            Commands.RegisterCommands<InfoModule>(debugGuild);
-            Commands.RegisterCommands<EncodeModule>(debugGuild);
-            Commands.RegisterCommands<DecodeModule>(debugGuild);
+            commands.RegisterCommands<GeneralModule>(debugGuild);
+            commands.RegisterCommands<InfoModule>(debugGuild);
+            commands.RegisterCommands<EncodeModule>(debugGuild);
+            commands.RegisterCommands<DecodeModule>(debugGuild);
 #else
-            Commands.RegisterCommands<GeneralModule>();
-            Commands.RegisterCommands<InfoModule>();
-            Commands.RegisterCommands<EncodeModule>();
-            Commands.RegisterCommands<DecodeModule>();
+            commands.RegisterCommands<GeneralModule>();
+            commands.RegisterCommands<InfoModule>();
+            commands.RegisterCommands<EncodeModule>();
+            commands.RegisterCommands<DecodeModule>();
 #endif
-            Commands.RegisterCommands<OwnerModule>(debugGuild);
+            commands.RegisterCommands<OwnerModule>(debugGuild);
 
             // Handle errored slash commands
-            Commands.SlashCommandErrored += OnSlashCommandErrored;
+            commands.SlashCommandErrored += OnSlashCommandErrored;
 
             // Start uptime
             Uptime.Start();
 
             // Connect
-            await Client.ConnectAsync();
+            await client.ConnectAsync();
+
+            // Create database
+            DivibotDbContext dbContext = Services.GetRequiredService<DivibotDbContext>();
+
+            // Apply migrations
+            await dbContext.Database.MigrateAsync();
+
+            // Update bot version
+            await dbContext.UpdateBotVersionAsync();
 
             // Don't close immediately
             await Task.Delay(-1);
@@ -84,7 +103,7 @@ namespace Divibot {
         // Handle bot ready event
         private static async Task OnReady(DiscordClient client, ReadyEventArgs evt) {
             // Set activity
-            await Client.UpdateStatusAsync(new DiscordActivity() {
+            await client.UpdateStatusAsync(new DiscordActivity() {
                 ActivityType = ActivityType.Playing,
                 Name = "with slash commands"
             });
@@ -142,6 +161,9 @@ namespace Divibot {
                 Content = content,
                 IsEphemeral = true
             });
+
+            // Log error
+            evt.Context.Client.Logger.LogError(evt.Exception, evt.Exception.Message);
         }
 
         // Divibot's definitely exclusive and totally amazing pagination feature

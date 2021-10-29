@@ -48,7 +48,7 @@ namespace Divibot.Commands {
                         continue;
                     }
                     output += (char) hexint;
-                } catch (Exception e) {
+                } catch (Exception) {
                     output = "Sorry, it seems as though the inputted hexadeicmal is invalid.";
                     return;
                 }

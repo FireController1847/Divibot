@@ -1,14 +1,25 @@
-﻿using DSharpPlus;
+﻿using Divibot.Database;
+using Divibot.Database.Entities;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.SlashCommands.Attributes;
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Divibot.Commands {
 
     public class GeneralModule : ApplicationCommandModule {
+
+        // Dependency Injection
+        private DivibotDbContext _dbContext;
+
+        // Constructor
+        public GeneralModule(DivibotDbContext dbContext) {
+            _dbContext = dbContext;
+        }
 
         [SlashCommand("test", "Checks to make sure the bot is up and running. If you don't get a response, it's probably not!")]
         public async Task TestAsync(InteractionContext context) {
@@ -74,6 +85,34 @@ namespace Divibot.Commands {
                 Content = "For support with Divibot, please join this server and ask for help in the #support channel :slight_smile: https://discord.gg/0xxkiR1rO4zRsYLp",
                 IsEphemeral = true
             });
+        }
+
+        [SlashCommand("commands", "Tells you the number of commands the bot has.")]
+        public async Task CommandsAsync(InteractionContext context) {
+            await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                Content = $"I currently have {context.Client.GetSlashCommands().RegisteredCommands.Sum((pair) => { return pair.Value.Count; })} commands."
+            });
+        }
+
+        [SlashCommand("version", "Tells you what the current version of Divibot is.")]
+        public async Task VersionAsync(InteractionContext context) {
+            await context.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+
+            EntityVersion version;
+            try {
+                version = _dbContext.Versions.FirstOrDefault();
+            } catch (Exception) {
+                version = null;
+            }
+            if (version != null) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"I'm currently running on version {version}"
+                });
+            } else {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = "It seems I had some trouble finding the version I'm running. Check back with me later, okay? :slight_smile:"
+                });
+            }
         }
 
         [SlashCommand("uptime", "Tells you how long Divibot has been up and running since its last restart.")]

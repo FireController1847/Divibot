@@ -23,7 +23,7 @@ namespace Divibot.Commands {
         [SlashCommand("serverlist", "Creates a list of servers using Divibot's pagination feature.")]
         [SlashRequireOwner]
         public async Task ServerlistAsync(InteractionContext context, [Option("page", "The page to list."), Minimum(1), Maximum(int.MaxValue)] long page = 1) {
-            IReadOnlyDictionary<ulong, DiscordGuild> guilds = Divibot.Client.Guilds;
+            IReadOnlyDictionary<ulong, DiscordGuild> guilds = context.Client.Guilds;
             string[] lines = guilds.Values.OrderBy(g => g.Name).Select((g, i) => {
                 return $"Server: {g.Name} ({g.Id})\nOwner: {g.Owner?.Username} ({g.Owner?.Id})\n";
             }).ToArray();
@@ -54,7 +54,7 @@ namespace Divibot.Commands {
                 content = $"```\n{result}\n```";
             } catch (Exception e) {
                 content = $"```\n{e.Message}\n\nSee console for more information.\n```";
-                Divibot.Client.Logger.LogError(e, e.Message);
+                context.Client.Logger.LogError(e, e.Message);
             }
 
             // Respond

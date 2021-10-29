@@ -1,13 +1,11 @@
 ﻿
 
 using DSharpPlus;
-using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
-using Microsoft.Extensions.Logging;
+using DSharpPlus.SlashCommands.Attributes;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -53,7 +51,7 @@ namespace Divibot.Commands {
         }
 
         [SlashCommand("server", "Provides information about the server in which the command was run.")]
-        [RequireGuild]
+        [SlashRequireGuild]
         public async Task ServerInfoAsync(InteractionContext context) {
             // Acknowledge interaction
             await context.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
