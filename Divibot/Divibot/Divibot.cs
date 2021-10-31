@@ -1,5 +1,6 @@
 ﻿using Divibot.Commands;
 using Divibot.Database;
+using Divibot.Database.Entities;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
@@ -58,6 +59,9 @@ namespace Divibot {
             // Handle ready event
             client.Ready += OnReady;
 
+            // Handle message created event
+            client.MessageCreated += OnMessageCreated;
+
             // Add slash commands
             SlashCommandsExtension commands = client.UseSlashCommands(new SlashCommandsConfiguration() {
                 Services = Services
@@ -107,6 +111,34 @@ namespace Divibot {
                 ActivityType = ActivityType.Playing,
                 Name = "with slash commands"
             });
+        }
+
+        // Handle messages being recieved
+        private static async Task OnMessageCreated(DiscordClient client, MessageCreateEventArgs evt) {
+            DivibotDbContext dbContext = Services.GetRequiredService<DivibotDbContext>();
+
+            // Check if author is AFK
+            EntityAfkUser afkAuthor = dbContext.AfkUsers.SingleOrDefault(u => u.UserId == evt.Author.Id);
+            if (afkAuthor != null) {
+                // Remove from database
+                dbContext.AfkUsers.Remove(afkAuthor);
+                await dbContext.SaveChangesAsync();
+
+                // Respond
+                await evt.Channel.SendMessageAsync("Welcome back! I've removed your AFK message :thumbsup:");
+            }
+
+            // Check for any AFK mentions
+            foreach (DiscordUser user in evt.MentionedUsers) {
+                if (user.Id == evt.Author.Id) {
+                    continue;
+                }
+
+                EntityAfkUser afkUser = dbContext.AfkUsers.SingleOrDefault(u => u.UserId == user.Id);
+                if (afkUser != null) {
+                    await evt.Channel.SendMessageAsync($":small_orange_diamond: **{user.Username}** is currently AFK! Reason: *{afkUser.Message}*");
+                }
+            }
         }
 
         // Handle slash command errors

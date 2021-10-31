@@ -63,6 +63,15 @@ namespace Divibot.Commands {
             });
         }
 
+        [SlashCommand("unregisterglobals", "Unregisteres all global commands.")]
+        [SlashRequireOwner]
+        public async Task UnregisterGlobalsAsync(InteractionContext context) {
+            await context.Client.BulkOverwriteGlobalApplicationCommandsAsync(Array.Empty<DiscordApplicationCommand>());
+            await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                Content = "All global commands unregistered! :thumbsup:"
+            });
+        }
+
     }
 
 }

@@ -94,10 +94,12 @@ namespace Divibot.Commands {
             });
         }
 
-        [SlashCommand("version", "Tells you what the current version of Divibot is.")]
+        [SlashCommand("version", "Tells you what the current version of Divibot is running.")]
         public async Task VersionAsync(InteractionContext context) {
+            // Acknowledge
             await context.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
 
+            // Fetch version
             EntityVersion version;
             try {
                 version = _dbContext.Versions.FirstOrDefault();
@@ -137,6 +139,79 @@ namespace Divibot.Commands {
                 Content = $"I've been online for {time}!"
             });
         }
+
+        [SlashCommand("afk", "Marks you as AFK. When you are tagged by others, the bot will tell them you're AFK.")]
+        public async Task AfkAsync(InteractionContext context, [Option("message", "The reason why you have gone AFK.")] string message = "AFK") {
+            // Check for mentions
+            if (context.ResolvedRoleMentions != null || context.ResolvedUserMentions != null) {
+                await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = "You cannot mention roles or users in your AFK message!",
+                    IsEphemeral = true
+                });
+                return;
+            }
+            
+            // Acknowledge
+            await context.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+
+            // Prepare response
+            string content;
+
+            // Check for existing afk message, if so, edit it, otherwise, add a new one
+            EntityAfkUser afkUser = _dbContext.AfkUsers.SingleOrDefault(u => u.UserId == context.User.Id);
+            if (afkUser != null) {
+                // Update database
+                afkUser.Message = message;
+
+                // Set content
+                content = $":thumbsup: Alright, I've changed your AFK message to: {message}";
+            } else {
+                // Update database
+                afkUser = new EntityAfkUser() {
+                    UserId = context.User.Id,
+                    Message = message
+                };
+                _dbContext.AfkUsers.Add(afkUser);
+
+                // Set content
+                content = $":thumbsup: Alright, I've marked you as AFK. Your reason is: {message}";
+            }
+
+            // Save changes
+            await _dbContext.SaveChangesAsync();
+
+            // Reply
+            await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                Content = content
+            });
+        }
+
+        [SlashCommand("afkp", "The same as the AFK command, but with a list of presets to use instead of a custom message.")]
+        public async Task AfkpAsync(
+            InteractionContext context,
+            [Choice("Sleeping 💤", "Sleeping 💤")]
+            [Choice("School 🏫", "School 🏫")]
+            [Choice("Dinner 🍗", "Dinner 🍗")]
+            [Choice("Lunch 🍔", "Lunch 🍔")]
+            [Choice("Breakfast 🍳", "Breakfast 🍳")]
+            [Choice("Gaming 🎮", "Gaming 🎮")]
+            [Choice("Work 👷", "Work 👷")]
+            [Choice("Family 👪", "Family 👪")]
+            [Choice("Homework 📖", "Homework 📖")]
+            [Choice("Studying 📚", "Studying 📚")]
+            [Choice("Coding 💻", "Coding 💻")]
+            [Choice("Restroom 🚽", "Restroom 🚽")]
+            [Choice("Toilet 🚽", "Toilet 🚽")]
+            [Choice("Bathroom 🚽", "Bathroom 🚽")]
+            [Choice("Shower 🚿", "Shower 🚿")]
+            [Choice("Bath 🛀", "Bath 🛀")]
+            [Choice("Life ☕", "Life ☕")]
+            [Choice("Taking a break 💨", "Taking a break 💨")]
+            [Option("message", "The preset to use for your AFK message.")] string preset
+        ) {
+            await AfkAsync(context, preset);
+        }
+
     }
 
 }
