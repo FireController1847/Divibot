@@ -76,12 +76,14 @@ namespace Divibot {
             commands.RegisterCommands<EncodeModule>(debugGuild);
             commands.RegisterCommands<DecodeModule>(debugGuild);
             commands.RegisterCommands<AttackModule>(debugGuild);
+            commands.RegisterCommands<ModerationModule>(debugGuild);
 #else
             commands.RegisterCommands<GeneralModule>();
             commands.RegisterCommands<InfoModule>();
             commands.RegisterCommands<EncodeModule>();
             commands.RegisterCommands<DecodeModule>();
             commands.RegisterCommands<AttackModule>();
+            commands.RegisterCommands<ModerationModule>();
 #endif
             commands.RegisterCommands<OwnerModule>(debugGuild);
 
