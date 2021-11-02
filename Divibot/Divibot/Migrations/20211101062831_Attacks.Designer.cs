@@ -2,14 +2,16 @@
 using Divibot.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Divibot.Migrations
 {
     [DbContext(typeof(DivibotDbContext))]
-    partial class DivibotDbContextModelSnapshot : ModelSnapshot
+    [Migration("20211101062831_Attacks")]
+    partial class Attacks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

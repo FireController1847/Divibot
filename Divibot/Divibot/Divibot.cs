@@ -1,10 +1,13 @@
-﻿using Divibot.Commands;
+﻿using Divibot.Attack;
+using Divibot.Commands;
 using Divibot.Database;
 using Divibot.Database.Entities;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
+using DSharpPlus.Interactivity;
+using DSharpPlus.Interactivity.Extensions;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.SlashCommands.Attributes;
 using DSharpPlus.SlashCommands.EventArgs;
@@ -42,19 +45,17 @@ namespace Divibot {
                     });
                 })
                 .AddSingleton<Random>()
-                .AddDbContext<DivibotDbContext>(builder => {
-                    string connectionString =
-                        $"server=localhost;" +
-                        $"database={Environment.GetEnvironmentVariable("DbDatabase")};" +
-                        $"user={Environment.GetEnvironmentVariable("DbUser")};" +
-                        $"password={Environment.GetEnvironmentVariable("DbPassword")};";
-
-                    builder.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
-                })
+                .AddDbContext<DivibotDbContext>()
+                .AddSingleton<AttackService>()
                 .BuildServiceProvider();
 
             // Create client
             DiscordClient client = Services.GetRequiredService<DiscordClient>();
+
+            // Enable interactivity
+            client.UseInteractivity(new InteractivityConfiguration() {
+                Timeout = TimeSpan.FromMinutes(5)
+            });
 
             // Handle ready event
             client.Ready += OnReady;
@@ -74,11 +75,13 @@ namespace Divibot {
             commands.RegisterCommands<InfoModule>(debugGuild);
             commands.RegisterCommands<EncodeModule>(debugGuild);
             commands.RegisterCommands<DecodeModule>(debugGuild);
+            commands.RegisterCommands<AttackModule>(debugGuild);
 #else
             commands.RegisterCommands<GeneralModule>();
             commands.RegisterCommands<InfoModule>();
             commands.RegisterCommands<EncodeModule>();
             commands.RegisterCommands<DecodeModule>();
+            commands.RegisterCommands<AttackModule>();
 #endif
             commands.RegisterCommands<OwnerModule>(debugGuild);
 
@@ -189,10 +192,21 @@ namespace Divibot {
             }
 
             // Respond
-            await evt.Context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
-                Content = content,
-                IsEphemeral = true
-            });
+            try {
+                await evt.Context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = content,
+                    IsEphemeral = true
+                });
+            } catch (Exception) {
+                try {
+                    // Presume it was acknowledged already
+                    await evt.Context.EditResponseAsync(new DiscordWebhookBuilder() {
+                        Content = content
+                    });
+                } catch (Exception) {
+                    // Oh well, we'll log it.
+                }
+            }
 
             // Log error
             evt.Context.Client.Logger.LogError(evt.Exception, evt.Exception.Message);
@@ -235,6 +249,20 @@ namespace Divibot {
             } else {
                 return string.Join(", ", items.ToArray(), 0, items.Count - 1) + " " + combiningWord + " " + items.Last();
             }
+        }
+
+        // Converts the given string input to snake case.
+        public static string ToSnakeCase(string input) {
+            return input.ToUpper().Replace(" ", "_");
+        }
+
+        // Converts the given string input (assuming it is in snake case first) to proper case
+        public static string ToProperCase(string input) {
+            string[] parts = input.ToLower().Split("_");
+            for (int i = 0; i < parts.Length; i++) {
+                parts[i] = parts[i].Substring(0, 1).ToUpper() + parts[i].Substring(1, parts[i].Length - 1);
+            }
+            return string.Join(" ", parts);
         }
 
     }

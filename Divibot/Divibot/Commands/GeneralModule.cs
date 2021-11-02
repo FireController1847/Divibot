@@ -108,7 +108,7 @@ namespace Divibot.Commands {
             }
             if (version != null) {
                 await context.EditResponseAsync(new DiscordWebhookBuilder() {
-                    Content = $"I'm currently running on version {version}"
+                    Content = $"I'm currently running on version Alpha {version}"
                 });
             } else {
                 await context.EditResponseAsync(new DiscordWebhookBuilder() {

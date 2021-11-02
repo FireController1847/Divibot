@@ -129,7 +129,7 @@ namespace Divibot.Commands {
             });
         }
 
-            [SlashCommand("fube", "Encodes a message using the Fire's Ultimate Botting Experience (FUBE) language.")]
+        [SlashCommand("fube", "Encodes a message using the Fire's Ultimate Botting Experience (FUBE) language.")]
         public async Task EncodeFubeAsync(InteractionContext context, [Option("text", "The text you wish to encode.")] string text) {
             string output = "";
             foreach (char chr in text) {
