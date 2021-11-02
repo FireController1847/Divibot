@@ -4,6 +4,7 @@ using DSharpPlus.SlashCommands;
 using DSharpPlus.SlashCommands.Attributes;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Divibot.Commands {
@@ -53,7 +54,30 @@ namespace Divibot.Commands {
 
             // Delete
             await response.DeleteAsync();
-        }  
+        }
+
+        [SlashCommand("cleardms", "Deletes all of the bot's messages in your DMs with it.")]
+        [SlashRequireDirectMessage]
+        public async Task ClearDMsAsync(InteractionContext context) {
+            await context.Interaction.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+
+            // Let's do this
+            bool keepGoing = true;
+            do {
+                // Fetch messages
+                IReadOnlyList<DiscordMessage> messages = await context.Channel.GetMessagesAsync();
+                IReadOnlyList<DiscordMessage> botMessages = messages.Where(m => m.Author.Id == context.Client.CurrentUser.Id).ToList();
+                if (botMessages.Count() == 0) {
+                    keepGoing = false;
+                }
+
+                // Delete messages
+                foreach (DiscordMessage message in botMessages) {
+                    await message.DeleteAsync();
+                    await Task.Delay(1000);
+                }
+            } while (keepGoing);
+        }
 
     }
 
