@@ -2,6 +2,7 @@
 using Divibot.Database.Entities;
 using DSharpPlus;
 using DSharpPlus.Entities;
+using DSharpPlus.Interactivity.Extensions;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.SlashCommands.Attributes;
 using Microsoft.EntityFrameworkCore;
@@ -28,45 +29,159 @@ namespace Divibot.Commands {
         [SlashRequireGuild]
         [SlashRequireUserPermissions(Permissions.ManageMessages)]
         [SlashRequireBotPermissions(Permissions.ManageMessages)]
-        public async Task PurgeAsync(InteractionContext context, [Option("amount", "The amount of messages to attempt to purge.")] [Maximum(int.MaxValue)] long amount) {
+        public async Task PurgeAsync(InteractionContext context, [Option("amount", "The amount of messages to attempt to purge.")] [Minimum(1)] [Maximum(int.MaxValue)] long amountLong) {
             // Acknowledge
-            await context.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+            await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                Content = "Please wait while I fetch the messages..."
+            });
 
-            // The acknowledgement will be deleted. Responses must be followups.
-            amount += 1;
+            // Calculate amount of 'pages'
+            int amount = Convert.ToInt32(amountLong) + 1;
+            int pages = (int) Math.Floor((double) amount / 100);
 
-            // Manage multiple groups
-            int totalMessageCount = 0;
-            int count = (int) Math.Floor((double) amount / 100);
-            if (count == 1) {
-                IReadOnlyList<DiscordMessage> messages = await context.Channel.GetMessagesAsync((int) amount);
-                totalMessageCount += messages.Count;
-                await context.Channel.DeleteMessagesAsync(messages, $"Purge requested by {context.User.Mention}");
-            } else {
-                for (int i = 0; i < count - 1; i++) {
-                    IReadOnlyList<DiscordMessage> loopMessages = await context.Channel.GetMessagesAsync(100);
-                    totalMessageCount += loopMessages.Count;
-                    if (loopMessages.Count == 0) {
-                        break;
-                    }
-                    await context.Channel.DeleteMessagesAsync(loopMessages, $"Purge requested by {context.User.Mention}");
-                    await Task.Delay(5000);
+            // Fetch all messages
+            List<DiscordMessage> messages = new List<DiscordMessage>();
+
+            // If there's more, add more
+            bool tooOld = false;
+            for (int i = 0; i < pages; i++) {
+                IReadOnlyList<DiscordMessage> loopMessages;
+                if (messages.Count == 0) {
+                    loopMessages = await context.Channel.GetMessagesAsync(100);
+                } else {
+                    loopMessages = await context.Channel.GetMessagesBeforeAsync(messages.Last().Id, 100);
                 }
-                IReadOnlyList<DiscordMessage> messages = await context.Channel.GetMessagesAsync((int) (amount % 100));
-                totalMessageCount += messages.Count;
-                if (messages.Count > 0) {
-                    await context.Channel.DeleteMessagesAsync(messages, $"Purge requested by {context.User.Mention}");
+                if (loopMessages.Count == 0) {
+                    break;
+                } else if (loopMessages.Last().Timestamp < DateTime.Now.Subtract(TimeSpan.FromDays(14))) {
+                    loopMessages = loopMessages.Where(m => m.Timestamp >= DateTime.Now.Subtract(TimeSpan.FromDays(14))).ToList();
+                    messages.AddRange(loopMessages);
+                    tooOld = true;
+                    break;
                 }
+                messages.AddRange(loopMessages);
+
+                // Give a status update, because why not
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"Please wait while I fetch the messages... (Found {messages.Count} messages)"
+                });
+
+                // Delay
+                await Task.Delay(1000);
             }
 
-            // Respond
-            DiscordMessage response = await context.Channel.SendMessageAsync($"Successfully deleted {(totalMessageCount - 1)} message{((totalMessageCount - 1) != 1 ? "s" : "")}.");
+            // Get the remaining amount, if there is any
+            if (amount % 100 != 0 && !tooOld) {
+                IReadOnlyList<DiscordMessage> remainingMessages;
+                if (messages.Count == 0) {
+                    remainingMessages = await context.Channel.GetMessagesAsync(amount % 100);
+                } else {
+                    remainingMessages = await context.Channel.GetMessagesBeforeAsync(messages.Last().Id, (amount % 100));
+                }
+                remainingMessages = remainingMessages.Where(m => m.Timestamp >= DateTime.Now.Subtract(TimeSpan.FromDays(14))).ToList();
+                messages.AddRange(remainingMessages);
+            }
+
+            // Handle no messages found (how?)
+            if (messages.Count == 0) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = "Sorry, I wasn't able to find any messages I can delete. As a reminder, I cannot delete messages more than 2 weeks old."
+                });
+
+                // Wait
+                await Task.Delay(5000);
+
+                try {
+                    // Delete response
+                    await context.DeleteResponseAsync();
+                } catch (Exception) {
+                    // Ok.
+                }
+
+                // Return
+                return;
+            }
+
+            // Remove first message, as that's the reply
+            messages.RemoveAt(0);
+
+            // Get the total count of messages
+            context.Client.Logger.LogInformation($"Total message count: {messages.Count}");
+
+            // Confirm
+            DiscordMessage lastMessage = messages.Last();
+            DiscordComponent[] components = new DiscordComponent[] {
+                new DiscordButtonComponent(ButtonStyle.Danger, "moderation_purge_confirm", "Confirm"),
+                new DiscordButtonComponent(ButtonStyle.Primary, "moderation_purge_cancel", "Cancel"),
+            };
+            await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                Content = $"A link to the last message I found that I can delete is below. All of the messages after this message will be deleted. Confirm?\n\n" +
+                          $"{lastMessage.JumpLink}"
+            }.AddComponents(components));
+            DiscordMessage responseMessage = await context.GetOriginalResponseAsync();
+
+            // Wait for response
+            var response = await responseMessage.WaitForButtonAsync(context.User);
+
+            // Handle timeout
+            if (response.TimedOut) {
+                await AttackModule.InteractionTimedOut(context.Interaction, responseMessage.Id, components);
+                return;
+            }
+
+            // Handle cancel
+            if (response.Result.Id == "moderation_purge_cancel") {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = "Whew, alright! No worries. That would've been close."
+                });
+
+                // Wait
+                await Task.Delay(5000);
+
+                try {
+                    // Delete response
+                    await context.DeleteResponseAsync();
+                } catch (Exception) {
+                    // Ok.
+                }
+
+                // Return
+                return;
+            }
+
+            // In-progress response
+            await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                Content = "Alright, I'll start removing these messages! Please wait, as this can take a long time if there are a lot of messages."
+            });
+
+            // Delete all messages
+            int messageCount = messages.Count;
+            int messagesPages = (int) Math.Floor((double) messages.Count / 100);
+            int messagesModulus = messages.Count % 100;
+            for (int i = 0; i < messagesPages; i++) {
+                await context.Channel.DeleteMessagesAsync(messages.Take(100), $"Purge requested by {context.User.Mention}");
+                await Task.Delay(5000);
+            }
+
+            // Delete remaining amount
+            if (messagesModulus != 0) {
+                await context.Channel.DeleteMessagesAsync(messages, $"Purge requested by {context.User.Mention}");
+            }
+
+            // Final response
+            await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                Content = $"All done! I've deleted {messageCount} message{(messageCount != 0 ? "s" : "")}."
+            });
 
             // Wait
             await Task.Delay(5000);
 
-            // Delete
-            await response.DeleteAsync();
+            try {
+                // Delete response
+                await context.DeleteResponseAsync();
+            } catch (Exception) {
+                // Ok.
+            }
         }
 
         [SlashCommand("yeet", "Removes the given user's permission to chat in the channel the command was run in.")]
@@ -179,7 +294,7 @@ namespace Divibot.Commands {
         [SlashRequireGuild]
         [SlashRequireUserPermissions(Permissions.ManageChannels)]
         [SlashRequireBotPermissions(Permissions.ManageChannels)]
-        public async Task UnyeetUser(InteractionContext context, [Option("user", "The user you wish to unyeet from the channel.")] DiscordUser user) {
+        public async Task UnyeetUserAsync(InteractionContext context, [Option("user", "The user you wish to unyeet from the channel.")] DiscordUser user) {
             // Get member
             DiscordMember member = user as DiscordMember;
 
@@ -210,6 +325,21 @@ namespace Divibot.Commands {
             DiscordOverwrite overwrite = null;
             foreach (DiscordOverwrite ow in channel.PermissionOverwrites) {
                 if (ow.Type == OverwriteType.Member && (await ow.GetMemberAsync()).Id == userId) {
+                    overwrite = ow;
+                    break;
+                }
+            }
+            return overwrite;
+        }
+
+        /// <summary>
+        /// Fetches an existing Discord member's overwrite, if it exists, from the given channel, otherwise returns null.
+        /// </summary>
+        public static async Task<DiscordOverwrite> GetExistingRoleOverwrite(DiscordChannel channel, ulong roleId) {
+            // Check channel overrides
+            DiscordOverwrite overwrite = null;
+            foreach (DiscordOverwrite ow in channel.PermissionOverwrites) {
+                if (ow.Type == OverwriteType.Role && (await ow.GetRoleAsync()).Id == roleId) {
                     overwrite = ow;
                     break;
                 }
@@ -258,6 +388,14 @@ namespace Divibot.Commands {
 
             // Pass to method
             await UnyeetUser(channel, member.Id, $"User {member.Username}#{member.Discriminator} ({member.Id}) was automatically un-yeeted since their time has ended.");
+        }
+
+        [SlashCommand("lockdown", "Removes everyone's ability to chat in the channel the command was run in.")]
+        [SlashRequireGuild]
+        [SlashRequireUserPermissions(Permissions.ManageChannels)]
+        [SlashRequireBotPermissions(Permissions.ManageChannels)]
+        public async Task LockdownAsync(InteractionContext context, [Option("time", "The amount of time this lockdown should last, if temporary.")] string time = "forever") {
+            // TODO: Complete.
         }
 
         [SlashCommand("cleardms", "Deletes all of the bot's messages in your DMs with it.")]

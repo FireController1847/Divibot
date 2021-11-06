@@ -188,7 +188,7 @@ namespace Divibot.Commands {
                     Content = "Are you sure you want to remove your current class? **Your score will be reset to zero**, and you'll have to take the survey again!",
                     IsEphemeral = true
                 }.AddComponents(components));
-                DiscordMessage responseMessage = await context.Interaction.GetOriginalResponseAsync();
+                DiscordMessage responseMessage = await context.GetOriginalResponseAsync();
 
                 // Wait for response
                 var response = await responseMessage.WaitForButtonAsync(context.User);
@@ -600,12 +600,14 @@ namespace Divibot.Commands {
             }
         }
 
+        // TODO: The bottom two following utility methods should be either an extension method or a utility function in Divibot, not here.
+
         /// <summary>
         /// Disables all of the provided components.
         /// </summary>
         /// <param name="components">The components to disable.</param>
         /// <returns>The components but disabled.</returns>
-        private static async Task<DiscordComponent[]> DisableComponents(DiscordComponent[] components) {
+        public static async Task<DiscordComponent[]> DisableComponents(DiscordComponent[] components) {
             foreach (DiscordComponent component in components) {
                 if (component is DiscordButtonComponent) {
                     (component as DiscordButtonComponent).Disable();
@@ -624,7 +626,7 @@ namespace Divibot.Commands {
         /// <param name="interaction">The interaction to use.</param>
         /// <param name="messageId">The id of the followup message to edit.</param>
         /// <param name="components">The components on the message, if any.</param>
-        private static async Task InteractionTimedOut(DiscordInteraction interaction, ulong messageId, DiscordComponent[] components = null) {
+        public static async Task InteractionTimedOut(DiscordInteraction interaction, ulong messageId, DiscordComponent[] components = null) {
             try {
                 // Begin building
                 DiscordWebhookBuilder builder = new DiscordWebhookBuilder() {
