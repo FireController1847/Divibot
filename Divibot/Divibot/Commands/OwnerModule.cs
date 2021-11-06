@@ -49,7 +49,8 @@ namespace Divibot.Commands {
             try {
                 string result = (await CSharpScript
                     .EvaluateAsync(code, ScriptOptions.Default
-                        .WithReferences(typeof(Divibot).Assembly),
+                        .WithReferences(typeof(Divibot).Assembly)
+                        .WithImports(new string[] { "System", "Divibot" }),
                     globals)).ToString();
                 content = $"```\n{result}\n```";
             } catch (Exception e) {

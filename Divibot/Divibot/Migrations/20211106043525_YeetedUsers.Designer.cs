@@ -3,14 +3,16 @@ using System;
 using Divibot.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Divibot.Migrations
 {
     [DbContext(typeof(DivibotDbContext))]
-    partial class DivibotDbContextModelSnapshot : ModelSnapshot
+    [Migration("20211106043525_YeetedUsers")]
+    partial class YeetedUsers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

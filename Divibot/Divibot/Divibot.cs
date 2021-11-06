@@ -6,6 +6,7 @@ using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
+using DSharpPlus.Exceptions;
 using DSharpPlus.Interactivity;
 using DSharpPlus.Interactivity.Extensions;
 using DSharpPlus.SlashCommands;
@@ -19,12 +20,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Timers;
 
 namespace Divibot {
 
     public static class Divibot {
 
         // Settings
+        public static EventId SlashCommandLogEventId { get; } = new EventId(1751, "SlashCommands");
         public static string Prefix { get; } = Environment.GetEnvironmentVariable("Prefix");
         public static Stopwatch Uptime { get; } = new Stopwatch();
 
@@ -87,6 +90,9 @@ namespace Divibot {
 #endif
             commands.RegisterCommands<OwnerModule>(debugGuild);
 
+            // Handle slash command executed
+            commands.SlashCommandExecuted += OnSlashCommandExecuted;
+
             // Handle errored slash commands
             commands.SlashCommandErrored += OnSlashCommandErrored;
 
@@ -104,6 +110,14 @@ namespace Divibot {
 
             // Update bot version
             await dbContext.UpdateBotVersionAsync();
+
+            // Begin database time checks
+            Timer databaseTimeCheckTimer = new Timer(TimeSpan.FromMinutes(1).TotalMilliseconds);
+            databaseTimeCheckTimer.Elapsed += (o, e) => dbContext.PerformTimedChecksAsync();
+            databaseTimeCheckTimer.Enabled = true;
+
+            // Perform timed checks on launch
+            dbContext.PerformTimedChecksAsync();
 
             // Don't close immediately
             await Task.Delay(-1);
@@ -144,6 +158,18 @@ namespace Divibot {
                     await evt.Channel.SendMessageAsync($":small_orange_diamond: **{user.Username}** is currently AFK! Reason: *{afkUser.Message}*");
                 }
             }
+        }
+
+        // Handle slash command execution
+        private static async Task OnSlashCommandExecuted(SlashCommandsExtension ext, SlashCommandExecutedEventArgs evt) {
+            string executedBy = $"{evt.Context.User.Username}#{evt.Context.User.Discriminator} ({evt.Context.User.Id})";
+            string executedIn;
+            if (evt.Context.Guild != null) {
+                executedIn = $"{evt.Context.Guild.Name} ({evt.Context.Guild.Id})";
+            } else {
+                executedIn = "DMs";
+            }
+            ext.Client.Logger.LogInformation(SlashCommandLogEventId, $"Slash command /{evt.Context.CommandName} was executed by {executedBy} in {executedIn}");
         }
 
         // Handle slash command errors
@@ -211,7 +237,12 @@ namespace Divibot {
             }
 
             // Log error
-            evt.Context.Client.Logger.LogError(evt.Exception, evt.Exception.Message);
+            evt.Context.Client.Logger.LogError(SlashCommandLogEventId, evt.Exception, evt.Exception.Message);
+
+            // Add extra details for bad requests
+            if (evt.Exception is BadRequestException) {
+                evt.Context.Client.Logger.LogError(SlashCommandLogEventId, (evt.Exception as BadRequestException).Errors);
+            }
         }
 
         // Divibot's definitely exclusive and totally amazing pagination feature

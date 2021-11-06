@@ -1,4 +1,5 @@
-﻿using Divibot.Database.Entities;
+﻿using Divibot.Commands;
+using Divibot.Database.Entities;
 using DSharpPlus;
 using DSharpPlus.SlashCommands;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,7 @@ namespace Divibot.Database {
         // Entities
         public DbSet<EntityVersion> Versions { get; set; }
         public DbSet<EntityAfkUser> AfkUsers { get; set; }
+        public DbSet<EntityYeetedUser> YeetedUsers { get; set; }
         public DbSet<EntityAttackUser> AttackUsers { get; set; }
         public DbSet<EntityAttackTypeChance> AttackTypeChances { get; set; }
         public DbSet<EntityCustomAttackCategoryChance> CustomAttackCategoryChances { get; set; }
@@ -29,6 +31,7 @@ namespace Divibot.Database {
         public DivibotDbContext() {
             // This is for migrations only.
             // To run "Add-Migration", enusre to set the environment variables below via $env:MYVAR="Value"
+            // To run "Update-Database", see above
         }
         public DivibotDbContext(DbContextOptions options, DiscordClient client) : base(options) {
             _client = client;
@@ -54,6 +57,8 @@ namespace Divibot.Database {
                 .HasKey(c => new { c.UserId, c.Category });
             builder.Entity<EntityCustomAttackModifierChance>()
                 .HasKey(m => new { m.UserId, m.Modifier });
+            builder.Entity<EntityYeetedUser>()
+                .HasKey(u => new { u.GuildId, u.ChannelId, u.UserId });
         }
 
         // Updates the bot's version number
@@ -76,6 +81,38 @@ namespace Divibot.Database {
             }
             _client.Logger.LogInformation(LOG_EVENT_ID, $"Running Divibot Alpha {version}");
             await SaveChangesAsync();
+        }
+
+        // Perform timed checks
+        public async Task PerformTimedChecksAsync() {
+            // Log
+            _client.Logger.LogInformation(LOG_EVENT_ID, "Performing timed checks...");
+
+            // Fetch all yeeted users
+            _client.Logger.LogDebug(LOG_EVENT_ID, $"Check yeet time expiry");
+            IQueryable<EntityYeetedUser> yeetedUsersReady = YeetedUsers.Where(u => u.ExpirationDate <= DateTime.Now);
+            int count = 0;
+            foreach (EntityYeetedUser yeetedUser in yeetedUsersReady) {
+                try {
+                    await ModerationModule.UnyeetUser(_client, yeetedUser.GuildId, yeetedUser.ChannelId, yeetedUser.UserId);
+                    count++;
+                    YeetedUsers.Remove(yeetedUser);
+                    await Task.Delay(400); // Delay just in case some weird ratelimit is hit for some reason
+                } catch (Exception) {
+                    // Oh well, we'll try again on the next pass.
+                }
+            }
+            if (count > 0) {
+                _client.Logger.LogInformation(LOG_EVENT_ID, $"Yeet time expired for {count} users");
+            } else {
+                _client.Logger.LogDebug(LOG_EVENT_ID, $"Yeet time expired for {count} users");
+            }
+
+            // Save
+            await SaveChangesAsync();
+
+            // Log
+            _client.Logger.LogInformation(LOG_EVENT_ID, "Timed checks complete");
         }
 
     }
