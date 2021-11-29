@@ -48,7 +48,7 @@ namespace Divibot {
                     });
                 })
                 .AddSingleton<Random>()
-                .AddDbContext<DivibotDbContext>()
+                .AddDbContext<DivibotDbContext>(ServiceLifetime.Transient)
                 .AddSingleton<AttackService>()
                 .BuildServiceProvider();
 
@@ -236,12 +236,15 @@ namespace Divibot {
                 }
             }
 
-            // Log error
-            evt.Context.Client.Logger.LogError(SlashCommandLogEventId, evt.Exception, evt.Exception.Message);
+            // Don't log error if it's just a failed check.
+            if (!(evt.Exception is SlashExecutionChecksFailedException)) {
+                // Log error
+                evt.Context.Client.Logger.LogError(SlashCommandLogEventId, evt.Exception, evt.Exception.Message);
 
-            // Add extra details for bad requests
-            if (evt.Exception is BadRequestException) {
-                evt.Context.Client.Logger.LogError(SlashCommandLogEventId, (evt.Exception as BadRequestException).Errors);
+                // Add extra details for bad requests
+                if (evt.Exception is BadRequestException) {
+                    evt.Context.Client.Logger.LogError(SlashCommandLogEventId, (evt.Exception as BadRequestException).Errors);
+                }
             }
         }
 
