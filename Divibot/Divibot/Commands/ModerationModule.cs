@@ -188,7 +188,7 @@ namespace Divibot.Commands {
         [SlashRequireGuild]
         [SlashRequireUserPermissions(Permissions.ManageChannels)]
         [SlashRequireBotPermissions(Permissions.ManageChannels)]
-        public async Task YeetAsync(InteractionContext context, [Option("user", "The user you want to yeet out of the channel.")] DiscordUser user, [Option("time", "The amount of time they should be yeeted for, if temporary. Defaults to infinity.")] string time = "forever") {
+        public async Task YeetAsync(InteractionContext context, [Option("user", "The user you want to yeet out of the channel.")] DiscordUser user, [Option("time", "The amount of time they should be yeeted for, if temporary. Defaults to infinity.")] string time = "forever", [Option("reason", "The reason you're yeeting this user.")] string reason = default) {
             // Get member
             DiscordMember member = user as DiscordMember;
 
@@ -202,11 +202,12 @@ namespace Divibot.Commands {
             }
 
             // Check for the requested user's permission
-            if (member.Hierarchy > context.Member.Hierarchy) {
+            if (member.Hierarchy >= context.Member.Hierarchy) {
                 await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
-                    Content = "Sorry, you can't yeet a user whose role is higher than yours.",
+                    Content = "Sorry, you can't yeet a user whose role is higher than or equal to yours.",
                     IsEphemeral = true
                 });
+                return;
             }
 
             // Check for an existing overwrite
@@ -268,13 +269,13 @@ namespace Divibot.Commands {
             if (overwrite != null) {
                 await overwrite.UpdateAsync(
                     deny: overwrite.Denied | Permissions.SendMessages | Permissions.AddReactions | Permissions.CreatePublicThreads | Permissions.CreatePrivateThreads,
-                    reason: $"User {context.User.Username}#{context.User.Discriminator} ({context.User.Id}) requested a yeetage of {user.Username}#{user.Discriminator} ({user.Id})"
+                    reason: reason == default ? $"User {context.User.Username}#{context.User.Discriminator} ({context.User.Id}) requested a yeetage of {user.Username}#{user.Discriminator} ({user.Id})" : reason
                 );
             } else {
                 await context.Channel.AddOverwriteAsync(
                     member,
                     deny: Permissions.SendMessages | Permissions.AddReactions | Permissions.CreatePublicThreads | Permissions.CreatePrivateThreads,
-                    reason: $"User {context.User.Username}#{context.User.Discriminator} ({context.User.Id}) requested a yeetage of {user.Username}#{user.Discriminator} ({user.Id})"
+                    reason: reason == default ? $"User {context.User.Username}#{context.User.Discriminator} ({context.User.Id}) requested a yeetage of {user.Username}#{user.Discriminator} ({user.Id})" : reason
                 );
             }
 
@@ -294,12 +295,12 @@ namespace Divibot.Commands {
         [SlashRequireGuild]
         [SlashRequireUserPermissions(Permissions.ManageChannels)]
         [SlashRequireBotPermissions(Permissions.ManageChannels)]
-        public async Task UnyeetUserAsync(InteractionContext context, [Option("user", "The user you wish to unyeet from the channel.")] DiscordUser user) {
+        public async Task UnyeetUserAsync(InteractionContext context, [Option("user", "The user you wish to unyeet from the channel.")] DiscordUser user, [Option("reason", "The reason you're unyeeting this user.")] string reason = default) {
             // Get member
             DiscordMember member = user as DiscordMember;
 
             // Pass to method
-            bool success = await UnyeetUser(context.Channel, member.Id, $"User {context.User.Username}#{context.User.Discriminator} ({context.User.Id}) requested an un-yeetage of {user.Username}#{user.Discriminator} ({user.Id})");
+            bool success = await UnyeetUser(context.Channel, member.Id, reason == default ? $"User {context.User.Username}#{context.User.Discriminator} ({context.User.Id}) requested an un-yeetage of {user.Username}#{user.Discriminator} ({user.Id})" : reason);
             if (!success) {
                 await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
                     Content = $"Sorry, looks like I wasn't able to find any permission overwrites for {user.Mention} that denies the 'Send Messages' permission.",
@@ -310,41 +311,12 @@ namespace Divibot.Commands {
 
             // Remove existing database values, if any
             await _dbContext.Database.ExecuteSqlRawAsync($"DELETE FROM yeetedusers WHERE GuildId = '{context.Guild.Id}' AND ChannelId = '{context.Channel.Id}' AND UserId = '{user.Id}'");
+            _dbContext.ChangeTracker.Clear();
 
             // Respond
             await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
                 Content = $"Alright, {user.Mention} now has permission to speak in this channel once more!"
             });
-        }
-
-        /// <summary>
-        /// Fetches an existing Discord member's overwrite, if it exists, from the given channel, otherwise returns null.
-        /// </summary>
-        public static async Task<DiscordOverwrite> GetExistingMemberOverwrite(DiscordChannel channel, ulong userId) {
-            // Check channel overrides
-            DiscordOverwrite overwrite = null;
-            foreach (DiscordOverwrite ow in channel.PermissionOverwrites) {
-                if (ow.Type == OverwriteType.Member && (await ow.GetMemberAsync()).Id == userId) {
-                    overwrite = ow;
-                    break;
-                }
-            }
-            return overwrite;
-        }
-
-        /// <summary>
-        /// Fetches an existing Discord member's overwrite, if it exists, from the given channel, otherwise returns null.
-        /// </summary>
-        public static async Task<DiscordOverwrite> GetExistingRoleOverwrite(DiscordChannel channel, ulong roleId) {
-            // Check channel overrides
-            DiscordOverwrite overwrite = null;
-            foreach (DiscordOverwrite ow in channel.PermissionOverwrites) {
-                if (ow.Type == OverwriteType.Role && (await ow.GetRoleAsync()).Id == roleId) {
-                    overwrite = ow;
-                    break;
-                }
-            }
-            return overwrite;
         }
 
         /// <summary>
@@ -419,6 +391,131 @@ namespace Divibot.Commands {
                     await Task.Delay(1000);
                 }
             } while (keepGoing);
+        }
+
+        [SlashCommand("kick", "Kicks a user from the server.")]
+        [SlashRequireGuild]
+        [SlashRequireUserPermissions(Permissions.KickMembers)]
+        [SlashRequireBotPermissions(Permissions.KickMembers)]
+        public async Task KickAsync(InteractionContext context, [Option("user", "The user you want to kick from the server.")] DiscordUser user, [Option("reason", "The reason you're kicking this user.")] string reason = default) {
+            // Get member
+            DiscordMember member = user as DiscordMember;
+
+            // Check for self
+            if (member.Id == context.User.Id) {
+                await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = "Sorry, you can't kick yourself. Why would you want to, anyways? :confused:",
+                    IsEphemeral = true
+                });
+                return;
+            }
+
+            // Check for the requested user's role position
+            if (member.Hierarchy >= context.Member.Hierarchy) {
+                await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = "Sorry, you can't kick a user whose role is higher than or equal to yours.",
+                    IsEphemeral = true
+                });
+                return;
+            }
+
+            // Kick user
+            await member.RemoveAsync(reason == default ? $"User {context.User.Username}#{context.User.Discriminator} ({context.User.Id}) requested a kick of {user.Username}#{user.Discriminator} ({user.Id})" : reason);
+
+            // Respond
+            await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                Content = $"Alright, I've kicked {user.Mention}."
+            });
+        }
+
+        // TODO: tempbans
+        [SlashCommand("ban", "Bans a user from the server.")]
+        [SlashRequireGuild]
+        [SlashRequireUserPermissions(Permissions.BanMembers)]
+        [SlashRequireBotPermissions(Permissions.BanMembers)]
+        public async Task BanAsync(InteractionContext context, [Option("user", "The user you want to ban from the server.")] DiscordUser user, [Option("deletedays", "The amount of days to remove a user's messages (up to 7).")] [Minimum(0)] [Maximum(7)] long days = 0, [Option("reason", "The reason you're banning this user.")] string reason = default) {
+            // Check for self
+            if (user.Id == context.User.Id) {
+                await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = "Sorry, you can't ban yourself. Why would you want to, anyways? :confused:",
+                    IsEphemeral = true
+                });
+                return;
+            }
+
+            // Check for the requested user's role position
+            DiscordMember member = user as DiscordMember;
+            if (member != null && member.Hierarchy >= context.Member.Hierarchy) {
+                await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = "Sorry, you can't ban a user whose role is higher than or equal to yours.",
+                    IsEphemeral = true
+                });
+                return;
+            }
+
+            // Ban user
+            await context.Guild.BanMemberAsync(user.Id, Convert.ToInt32(days), reason == default ? $"User {context.User.Username}#{context.User.Discriminator} ({context.User.Id}) requested a ban of {user.Username}#{user.Discriminator} ({user.Id})" : reason);
+
+            // Respond
+            await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                Content = $"Alright, I've banned {user.Mention}."
+            });
+        }
+
+        [SlashCommand("unban", "Attempts to unban a user from the server.")]
+        [SlashRequireGuild]
+        [SlashRequireUserPermissions(Permissions.BanMembers)]
+        [SlashRequireBotPermissions(Permissions.BanMembers)]
+        public async Task UnbanAsync(InteractionContext context, [Option("user", "The user you want to unban from the server.")] DiscordUser user, [Option("reason", "The reason you're unbanning this user.")] string reason = default) {
+            // Attempt to fetch ban
+            DiscordBan ban;
+            try {
+                ban = await context.Guild.GetBanAsync(user);
+            } catch (Exception) {
+                await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = "Sorry, I wasn't able to find a ban for that user.",
+                    IsEphemeral = true
+                });
+                return;
+            }
+
+            // If one exists, remove it
+            await context.Guild.UnbanMemberAsync(user, reason == default ? $"User {context.User.Username}#{context.User.Discriminator} ({context.User.Id}) requested an unban of {user.Username}#{user.Discriminator} ({user.Id})" : reason);
+
+            // Respond
+            await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                Content = $"Alright, I've unbanned {user.Mention}."
+            });
+        }
+
+        /// <summary>
+        /// Fetches an existing Discord member's overwrite, if it exists, from the given channel, otherwise returns null.
+        /// </summary>
+        public static async Task<DiscordOverwrite> GetExistingMemberOverwrite(DiscordChannel channel, ulong userId) {
+            // Check channel overrides
+            DiscordOverwrite overwrite = null;
+            foreach (DiscordOverwrite ow in channel.PermissionOverwrites) {
+                if (ow.Type == OverwriteType.Member && (await ow.GetMemberAsync()).Id == userId) {
+                    overwrite = ow;
+                    break;
+                }
+            }
+            return overwrite;
+        }
+
+        /// <summary>
+        /// Fetches an existing Discord member's overwrite, if it exists, from the given channel, otherwise returns null.
+        /// </summary>
+        public static async Task<DiscordOverwrite> GetExistingRoleOverwrite(DiscordChannel channel, ulong roleId) {
+            // Check channel overrides
+            DiscordOverwrite overwrite = null;
+            foreach (DiscordOverwrite ow in channel.PermissionOverwrites) {
+                if (ow.Type == OverwriteType.Role && (await ow.GetRoleAsync()).Id == roleId) {
+                    overwrite = ow;
+                    break;
+                }
+            }
+            return overwrite;
         }
 
     }

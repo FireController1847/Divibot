@@ -212,6 +212,7 @@ namespace Divibot.Commands {
                 await _dbContext.Database.ExecuteSqlRawAsync($"DELETE FROM attacktypechances WHERE UserId = '{context.User.Id}'");
                 await _dbContext.Database.ExecuteSqlRawAsync($"DELETE FROM customattackcategorychances WHERE UserId = '{context.User.Id}'");
                 await _dbContext.Database.ExecuteSqlRawAsync($"DELETE FROM customattackmodifierchances WHERE UserId = '{context.User.Id}'");
+                _dbContext.ChangeTracker.Clear();
 
                 // Respond
                 await context.EditResponseAsync(new DiscordWebhookBuilder() {
@@ -467,6 +468,7 @@ namespace Divibot.Commands {
             // Remove any possible previous chances
             await _dbContext.Database.ExecuteSqlRawAsync($"DELETE FROM customattackcategorychances WHERE UserId = '{context.User.Id}'");
             await _dbContext.Database.ExecuteSqlRawAsync($"DELETE FROM customattackmodifierchances WHERE UserId = '{context.User.Id}'");
+            _dbContext.ChangeTracker.Clear();
 
             // // Final calculations \\ \\
             // Get the user's minimum and maximum scores
