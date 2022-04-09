@@ -40,8 +40,8 @@ namespace Divibot.Commands {
             content += $"**>>** Status: __{user.Presence.Status}__\n";
             content += $"**>>** Custom Status: __{(user.Presence.Activities.Count > 0 && user.Presence.Activities[0].CustomStatus != null ? user.Presence.Activities[0].CustomStatus.Name : "None")}__\n";
             content += $"**>>** Avatar: {user.GetAvatarUrl(ImageFormat.Auto, 256)}\n";
-            if (user is DiscordMember && (user as DiscordMember).GuildAvatarHash != user.AvatarHash) {
-                content += $"**>>** Server Avatar: {(user as DiscordMember).GuildAvatarUrl.Replace("?size=1024", "?size=256")}";
+            if (user is DiscordMember && (user as DiscordMember).GuildAvatarUrl != null) {
+                content += $"**>>** Server Avatar: {(user as DiscordMember).GetGuildAvatarUrl(ImageFormat.Auto, 256)}";
             }
 
             // Respond
@@ -74,7 +74,7 @@ namespace Divibot.Commands {
             } catch (Exception) {
                 // Fail silently
             }
-            content += $"**>>** Server Icon: {context.Guild.IconUrl}?size=256\n";
+            content += $"**>>** Server Icon: {context.Guild.GetIconUrl(ImageFormat.Auto, 256)}\n";
 
             // Respond with a message
             await context.EditResponseAsync(new DiscordWebhookBuilder() {
