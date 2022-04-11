@@ -8,6 +8,10 @@ using DSharpPlus.SlashCommands.Attributes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace Divibot.Commands {
@@ -17,10 +21,13 @@ namespace Divibot.Commands {
 
         // Dependency Injection
         public MusicService _musicService;
+        public HttpClient HttpClient;
 
         // Constructor
         public MusicModule(MusicService musicService) {
             this._musicService = musicService;
+            this.HttpClient = new HttpClient();
+            this.HttpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Divibot", "100.0.1185.36"));
         }
 
         [SlashCommand("play", "Plays music!")]
@@ -335,7 +342,7 @@ namespace Divibot.Commands {
 
         [SlashCommand("move", "Moves songs around in the queue")]
         [SlashRequireGuild]
-        public async Task DequeueAsync(InteractionContext context, [Minimum(1)] [Maximum(int.MaxValue)] [Option("From", "The position of the song to move from")] long from, [Minimum(1)] [Maximum(int.MaxValue)] [Option("To", "The position of the song to move to")] long to) {
+        public async Task MoveAsync(InteractionContext context, [Minimum(1)] [Maximum(int.MaxValue)] [Option("From", "The position of the song to move from")] long from, [Minimum(1)] [Maximum(int.MaxValue)] [Option("To", "The position of the song to move to")] long to) {
             LavalinkNodeConnection node = await this.GetNodeConnectionAsync(context);
             if (node == null) return;
             LavalinkGuildConnection conn = await this.GetGuildConnectionAsync(context, node);
@@ -373,13 +380,74 @@ namespace Divibot.Commands {
             });
         }
 
-        [SlashCommand("repeat", "Repeats the current song")]
-        [SlashRequireGuild]
-        public async Task RepeatAsync(InteractionContext context, [Choice("start", "start")] [Choice("end", "end")] [Option("Choice", "Whether to enable or disable repeating")] string choice) {
+        [SlashCommand("lyrics", "Sends the lyrics for the current song")]
+        public async Task LyricsAsync(InteractionContext context, [Minimum(1)] [Maximum(int.MaxValue)] [Option("Page", "The page to view.")] long page = 1) {
+            // Acknowledge
+            await context.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+
             LavalinkNodeConnection node = await this.GetNodeConnectionAsync(context);
             if (node == null) return;
             LavalinkGuildConnection conn = await this.GetGuildConnectionAsync(context, node);
             if (conn == null) return;
+
+            // Get current song
+            LavalinkTrack track = conn.CurrentState.CurrentTrack;
+
+            HttpResponseMessage httpResponseMessage = await HttpClient.GetAsync($"https://api.lyrics.ovh/v1/{track.Author}/{track.Title}");
+            if (!httpResponseMessage.IsSuccessStatusCode) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"I was unable to find lyrics for **{track.Title}** by *${track.Author}*"
+                });
+
+                return;
+            }
+
+            string response = httpResponseMessage.Content.ReadAsStringAsync().Result;
+            if (string.IsNullOrEmpty(response)) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"There was an error processing your request."
+                });
+
+                return;
+            }
+
+            JsonDocument responseObj = JsonDocument.Parse(response);
+            if (responseObj.RootElement.TryGetProperty("lyrics", out JsonElement lyricsProp))
+            {
+                string lyrics = lyricsProp.GetString();
+                if (lyrics is null) {
+                    await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                        Content = $"There was an error processing your request."
+                    });
+
+                    return;
+                }
+                lyrics = lyrics.Replace("\\n", "\n").Replace("\\r", "");
+                
+                // Check for an invalid page
+                if (page > (int)Math.Ceiling((double)lyrics.Count(c =>  c.Equals("\n")) + 1 / 10)) {
+                    await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                        Content = "I'm not sure how to navigate to that page? :thinking:"
+                    });
+                    
+                    return;
+                }
+                
+                // Respond
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"Here's the lyrics for **{track.Title}** by *{track.Author}*:\n\n{this.PrepareLyricsPagination(lyrics, (int) page)}"
+                });
+            } else {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"There was an error processing your request."
+                });
+            }
+        }
+
+        [SlashCommand("repeat", "Repeats the current song")]
+        [SlashRequireGuild]
+        public async Task RepeatAsync(InteractionContext context, [Choice("start", "start")] [Choice("end", "end")] [Option("Choice", "Whether to enable or disable repeating")] string choice) {
+        
             MusicPlayer player = await this.GetMusicPlayerAsync(context, conn);
             if (player == null) return;
 
@@ -433,6 +501,14 @@ namespace Divibot.Commands {
             }).ToArray();
             string output = Divibot.Pagination(lines, (int)page - 1);
             return $"{output}\nPage {page}/{(int)Math.Ceiling((double)player.Queue.Count / 10)}";
+        }
+        
+        // Prepare lyrics string
+        private string PrepareLyricsPagination(string lyrics, int page)
+        {
+            string[] lines = lyrics.Split("\n").Select(str => $"- {str}").ToArray();
+            string output = Divibot.Pagination(lines, (int)page - 1);
+            return $"{output}\nPage {page}/{(int)Math.Ceiling((double)lyrics.Count(c =>  c.Equals("\n")) + 1 / 10)}";
         }
 
     }
