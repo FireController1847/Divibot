@@ -13,6 +13,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using System.Web;
 
 namespace Divibot.Commands {
 
@@ -104,7 +105,9 @@ namespace Divibot.Commands {
                 return;
             } else {
                 await conn.PlayAsync(result.Tracks.First());
-                await context.DeleteResponseAsync();
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"Let's go! It's time to start this jammin' session!"
+                });
                 return;
             }
         }
@@ -380,74 +383,13 @@ namespace Divibot.Commands {
             });
         }
 
-        [SlashCommand("lyrics", "Sends the lyrics for the current song")]
-        public async Task LyricsAsync(InteractionContext context, [Minimum(1)] [Maximum(int.MaxValue)] [Option("Page", "The page to view.")] long page = 1) {
-            // Acknowledge
-            await context.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
-
+        [SlashCommand("repeat", "Repeats the current song")]
+        [SlashRequireGuild]
+        public async Task RepeatAsync(InteractionContext context, [Choice("start", "start")][Choice("end", "end")][Option("Choice", "Whether to enable or disable repeating")] string choice) {
             LavalinkNodeConnection node = await this.GetNodeConnectionAsync(context);
             if (node == null) return;
             LavalinkGuildConnection conn = await this.GetGuildConnectionAsync(context, node);
             if (conn == null) return;
-
-            // Get current song
-            LavalinkTrack track = conn.CurrentState.CurrentTrack;
-
-            HttpResponseMessage httpResponseMessage = await HttpClient.GetAsync($"https://api.lyrics.ovh/v1/{track.Author}/{track.Title}");
-            if (!httpResponseMessage.IsSuccessStatusCode) {
-                await context.EditResponseAsync(new DiscordWebhookBuilder() {
-                    Content = $"I was unable to find lyrics for **{track.Title}** by *${track.Author}*"
-                });
-
-                return;
-            }
-
-            string response = httpResponseMessage.Content.ReadAsStringAsync().Result;
-            if (string.IsNullOrEmpty(response)) {
-                await context.EditResponseAsync(new DiscordWebhookBuilder() {
-                    Content = $"There was an error processing your request."
-                });
-
-                return;
-            }
-
-            JsonDocument responseObj = JsonDocument.Parse(response);
-            if (responseObj.RootElement.TryGetProperty("lyrics", out JsonElement lyricsProp))
-            {
-                string lyrics = lyricsProp.GetString();
-                if (lyrics is null) {
-                    await context.EditResponseAsync(new DiscordWebhookBuilder() {
-                        Content = $"There was an error processing your request."
-                    });
-
-                    return;
-                }
-                lyrics = lyrics.Replace("\\n", "\n").Replace("\\r", "");
-                
-                // Check for an invalid page
-                if (page > (int)Math.Ceiling((double)lyrics.Count(c =>  c.Equals("\n")) + 1 / 10)) {
-                    await context.EditResponseAsync(new DiscordWebhookBuilder() {
-                        Content = "I'm not sure how to navigate to that page? :thinking:"
-                    });
-                    
-                    return;
-                }
-                
-                // Respond
-                await context.EditResponseAsync(new DiscordWebhookBuilder() {
-                    Content = $"Here's the lyrics for **{track.Title}** by *{track.Author}*:\n\n{this.PrepareLyricsPagination(lyrics, (int) page)}"
-                });
-            } else {
-                await context.EditResponseAsync(new DiscordWebhookBuilder() {
-                    Content = $"There was an error processing your request."
-                });
-            }
-        }
-
-        [SlashCommand("repeat", "Repeats the current song")]
-        [SlashRequireGuild]
-        public async Task RepeatAsync(InteractionContext context, [Choice("start", "start")] [Choice("end", "end")] [Option("Choice", "Whether to enable or disable repeating")] string choice) {
-        
             MusicPlayer player = await this.GetMusicPlayerAsync(context, conn);
             if (player == null) return;
 
@@ -465,6 +407,99 @@ namespace Divibot.Commands {
                 // Respond
                 await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
                     Content = "Gettin' sick of it? Alright, I'll stop repeating this song after it ends."
+                });
+            }
+        }
+
+        [SlashCommand("lyrics", "Sends the lyrics for the current song")]
+        public async Task LyricsAsync(InteractionContext context, [Minimum(1)] [Maximum(int.MaxValue)] [Option("Page", "The page to view.")] long page = 1) {
+            // Acknowledge
+            await context.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+
+            LavalinkNodeConnection node = await this.GetNodeConnectionAsync(context);
+            if (node == null) return;
+            LavalinkGuildConnection conn = await this.GetGuildConnectionAsync(context, node);
+            if (conn == null) return;
+
+            // Get current song
+            LavalinkTrack track = conn.CurrentState.CurrentTrack;
+
+            // Find suggestions
+            HttpResponseMessage httpSuggestResponse = await HttpClient.GetAsync($"https://api.lyrics.ovh/suggest/{HttpUtility.UrlEncode(track.Title.ToLower().Replace("official", "").Replace("video", "").Replace("-", "").Replace("(", "").Replace(")", "").Replace("lyrics", "").Replace("lyric", "").Replace("kareoke", "") + " " + track.Author.ToLower().Replace("topic", "").Replace("official", "").Replace("-", "").Replace("(", "").Replace(")", ""))}");
+            if (!httpSuggestResponse.IsSuccessStatusCode) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"I was unable to find lyrics for **{track.Title}** by *{track.Author}*"
+                });
+                return;
+            }
+            string suggestResponse = httpSuggestResponse.Content.ReadAsStringAsync().Result;
+            JsonDocument suggestResponseObj = JsonDocument.Parse(suggestResponse);
+            if (suggestResponseObj == null) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"I was unable to find lyrics for **{track.Title}** by *{track.Author}*"
+                });
+                return;
+            }
+            JsonElement suggestResponseFirstObj = suggestResponseObj.RootElement.GetProperty("data");
+            if (suggestResponseFirstObj.GetArrayLength() == 0) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"I was unable to find lyrics for **{track.Title}** by *{track.Author}*"
+                });
+                return;
+            }
+            JsonElement? suggestResponseFirstInArr = suggestResponseFirstObj.EnumerateArray().First();
+            if (suggestResponseFirstInArr == null) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"I was unable to find lyrics for **{track.Title}** by *{track.Author}*"
+                });
+                return;
+            }
+            JsonElement artist = suggestResponseFirstInArr.Value.GetProperty("artist").GetProperty("name");
+            JsonElement title = suggestResponseFirstInArr.Value.GetProperty("title");
+
+            // Get API response
+            HttpResponseMessage httpResponseMessage = await HttpClient.GetAsync($"https://api.lyrics.ovh/v1/{artist}/{title}");
+            if (!httpResponseMessage.IsSuccessStatusCode) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"I was unable to find lyrics for **{track.Title}** by *{track.Author}*"
+                });
+                return;
+            }
+
+            string response = httpResponseMessage.Content.ReadAsStringAsync().Result;
+            if (string.IsNullOrEmpty(response)) {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"There was an error processing your request."
+                });
+                return;
+            }
+
+            JsonDocument responseObj = JsonDocument.Parse(response);
+            if (responseObj.RootElement.TryGetProperty("lyrics", out JsonElement lyricsProp)) {
+                string lyrics = lyricsProp.GetString();
+                if (lyrics == null) {
+                    await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                        Content = $"There was an error processing your request."
+                    });
+                    return;
+                }
+                lyrics = lyrics.Replace("\\n", "\n").Replace("\\r", "");
+
+                // Check for an invalid page
+                if (page > (int)Math.Ceiling((double)(lyrics.Count(c => c == '\n') + 1) / 10)) {
+                    await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                        Content = "I'm not sure how to navigate to that page? :thinking:"
+                    });
+                    return;
+                }
+                
+                // Respond
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"Here's the lyrics for **{track.Title}** by *{track.Author}*:\n\n{this.PrepareLyricsPagination(lyrics, (int) page)}"
+                });
+            } else {
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = $"There was an error processing your request."
                 });
             }
         }
@@ -504,11 +539,10 @@ namespace Divibot.Commands {
         }
         
         // Prepare lyrics string
-        private string PrepareLyricsPagination(string lyrics, int page)
-        {
-            string[] lines = lyrics.Split("\n").Select(str => $"- {str}").ToArray();
+        private string PrepareLyricsPagination(string lyrics, int page) {
+            string[] lines = lyrics.Split("\n").ToArray();
             string output = Divibot.Pagination(lines, (int)page - 1);
-            return $"{output}\nPage {page}/{(int)Math.Ceiling((double)lyrics.Count(c =>  c.Equals("\n")) + 1 / 10)}";
+            return $"{output}\nPage {page}/{(int)Math.Ceiling((double)(lyrics.Count(c => c == '\n') + 1) / 10)}";
         }
 
     }
