@@ -84,6 +84,13 @@ namespace Divibot.Music {
                 return;
             }
 
+            // If repeat, then repeat
+            if (player.Repeat) {
+                await conn.PlayAsync(args.Track);
+                await conn.SeekAsync(TimeSpan.Zero);
+                return;
+            }
+
             // Fetch next track
             await this.Skip(conn, player);
         }
@@ -129,6 +136,7 @@ namespace Divibot.Music {
         public ulong GuildId { get; }
         public DiscordChannel TextChannel { get; set; } = null;
         public Queue<LavalinkTrack> Queue { get; } = new Queue<LavalinkTrack>();
+        public bool Repeat { get; set; } = false;
 
         // Constructor
         public MusicPlayer(ulong guildId) {

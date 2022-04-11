@@ -373,6 +373,34 @@ namespace Divibot.Commands {
             });
         }
 
+        [SlashCommand("repeat", "Repeats the current song")]
+        [SlashRequireGuild]
+        public async Task RepeatAsync(InteractionContext context, [Choice("start", "start")] [Choice("end", "end")] [Option("Choice", "Whether to enable or disable repeating")] string choice) {
+            LavalinkNodeConnection node = await this.GetNodeConnectionAsync(context);
+            if (node == null) return;
+            LavalinkGuildConnection conn = await this.GetGuildConnectionAsync(context, node);
+            if (conn == null) return;
+            MusicPlayer player = await this.GetMusicPlayerAsync(context, conn);
+            if (player == null) return;
+
+            // Set repeat
+            if (choice == "start") {
+                player.Repeat = true;
+
+                // Respond
+                await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = "Okay, I'll keep repeating this song after it ends until you tell me to stop! :grin:"
+                });
+            } else if (choice == "end") {
+                player.Repeat = false;
+
+                // Respond
+                await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = "Gettin' sick of it? Alright, I'll stop repeating this song after it ends."
+                });
+            }
+        }
+
         // Fetches a guild connection
         private async Task<LavalinkGuildConnection?> GetGuildConnectionAsync(InteractionContext context, LavalinkNodeConnection node) {
             if (!node.ConnectedGuilds.TryGetValue(context.Guild.Id, out LavalinkGuildConnection conn)) {
