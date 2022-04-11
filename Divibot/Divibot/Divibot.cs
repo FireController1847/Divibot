@@ -2,6 +2,7 @@
 using Divibot.Commands;
 using Divibot.Database;
 using Divibot.Database.Entities;
+using Divibot.Music;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
@@ -53,6 +54,7 @@ namespace Divibot {
                 .AddSingleton<Random>()
                 .AddDbContext<DivibotDbContext>(ServiceLifetime.Transient)
                 .AddSingleton<AttackService>()
+                .AddSingleton<MusicService>()
                 .BuildServiceProvider();
 
             // Create client
@@ -76,22 +78,11 @@ namespace Divibot {
 
             // Register modules
             ulong debugGuild = ulong.Parse(Environment.GetEnvironmentVariable("DebugGuild"));
+            await RegisterCommandModules(commands, debugGuild);
 #if DEBUG
-            commands.RegisterCommands<GeneralModule>(debugGuild);
-            commands.RegisterCommands<InfoModule>(debugGuild);
-            commands.RegisterCommands<EncodeModule>(debugGuild);
-            commands.RegisterCommands<DecodeModule>(debugGuild);
-            commands.RegisterCommands<AttackModule>(debugGuild);
-            commands.RegisterCommands<ModerationModule>(debugGuild);
-            commands.RegisterCommands<MusicModule>(debugGuild);
-#else
-            commands.RegisterCommands<GeneralModule>();
-            commands.RegisterCommands<InfoModule>();
-            commands.RegisterCommands<EncodeModule>();
-            commands.RegisterCommands<DecodeModule>();
-            commands.RegisterCommands<AttackModule>();
-            commands.RegisterCommands<ModerationModule>();
-            commands.RegisterCommands<MusicModule>();
+            if (ulong.TryParse(Environment.GetEnvironmentVariable("DebugGuild2"), out ulong debugGuild2)) {
+                await RegisterCommandModules(commands, debugGuild2);
+            }
 #endif
             commands.RegisterCommands<OwnerModule>(debugGuild);
 
@@ -142,6 +133,27 @@ namespace Divibot {
 
             // Don't close immediately
             await Task.Delay(-1);
+        }
+        
+        // Registers the command modules
+        private static async Task RegisterCommandModules(SlashCommandsExtension commands, ulong guildId) {
+#if DEBUG
+            commands.RegisterCommands<GeneralModule>(guildId);
+            commands.RegisterCommands<InfoModule>(guildId);
+            commands.RegisterCommands<EncodeModule>(guildId);
+            commands.RegisterCommands<DecodeModule>(guildId);
+            commands.RegisterCommands<AttackModule>(guildId);
+            commands.RegisterCommands<ModerationModule>(guildId);
+            commands.RegisterCommands<MusicModule>(guildId);
+#else
+            commands.RegisterCommands<GeneralModule>();
+            commands.RegisterCommands<InfoModule>();
+            commands.RegisterCommands<EncodeModule>();
+            commands.RegisterCommands<DecodeModule>();
+            commands.RegisterCommands<AttackModule>();
+            commands.RegisterCommands<ModerationModule>();
+            commands.RegisterCommands<MusicModule>();
+#endif
         }
 
         // Handle bot ready event
@@ -320,6 +332,18 @@ namespace Divibot {
                 parts[i] = parts[i].Substring(0, 1).ToUpper() + parts[i].Substring(1, parts[i].Length - 1);
             }
             return string.Join(" ", parts);
+        }
+
+        // List shuffle extension method
+        public static void Shuffle<T>(this IList<T> list) {
+            int n = list.Count;
+            while (n > 1) {
+                n--;
+                int k = Services.GetService<Random>().Next(n + 1);
+                T value = list[k];
+                list[k] = list[n];
+                list[n] = value;
+            }
         }
 
     }
