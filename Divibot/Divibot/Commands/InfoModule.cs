@@ -60,9 +60,15 @@ namespace Divibot.Commands {
             string content = $"Here's some information about the server {context.Guild.Name}:\n\n";
 
             // Add guild information
+            if (!string.IsNullOrEmpty(context.Guild.Description)) {
+                content += $"**>>** Description: __{context.Guild.Description}__\n";
+            }
             content += $"**>>** Channels: __{context.Guild.Channels.Count}__\n";
-            content += $"**>>** Members: __{context.Guild.Members.Count}__\n";
+            content += $"**>>** Members: __{context.Guild.MemberCount}__\n";
             content += $"**>>** Roles: __{context.Guild.Roles.Count}__\n";
+            content += $"**>>** Emojis: __{context.Guild.Emojis.Count}__\n";
+            content += $"**>>** Stickers: __{context.Guild.Stickers.Count}__\n";
+            content += $"**>>** Creation Date: __{context.Guild.CreationTimestamp.UtcDateTime.ToString($"dddd, MMMM d, yyyy 'at' h:mm tt, 'UTC'")}__\n";
             content += $"**>>** Owner: __{context.Guild.Owner.Nickname ?? context.Guild.Owner.Username}__\n";
             try {
                 if ((await context.Guild.GetMemberAsync(context.Client.CurrentUser.Id)).Permissions.HasPermission(Permissions.ManageGuild)) {
