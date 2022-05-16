@@ -58,6 +58,14 @@ namespace Divibot.Commands {
             });
         }
 
+        [SlashCommand("invite", "Gives you the invite link for the bot.")]
+        public async Task InviteAsync(InteractionContext context) {
+            await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                Content = "http://discord.com/api/oauth2/authorize?client_id=225116689275158528&permissions=0&scope=bot%20applications.commands",
+                IsEphemeral = true
+            });
+        }
+
         [SlashCommand("servers", "Tells you the number of servers that the bot is in.")]
         public async Task ServersAsync(InteractionContext context) {
             await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {

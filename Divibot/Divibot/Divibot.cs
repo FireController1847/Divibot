@@ -169,6 +169,24 @@ namespace Divibot {
         private static async Task OnMessageCreated(DiscordClient client, MessageCreateEventArgs evt) {
             DivibotDbContext dbContext = Services.GetRequiredService<DivibotDbContext>();
 
+            // Check for old-commands and warn users
+            if (evt.Message.Content.StartsWith("D$")) {
+                try {
+                    string content = "Hey there! Just so you know, Divibot has switched over to slash commands! To continue using the bot, you need to re-invite it with permission to create slash commands. Here's link to be able to do so:\n\nhttps://discord.com/api/oauth2/authorize?client_id=225116689275158528&permissions=0&scope=bot%20applications.commands\n\nIf you're not the server owner or don't have permission to do this, you might want to message them to let them know!\n\nIf you've already done this, you should be able to start using slash commands right now! If you're not sure how to use them, check out the Discord article below!\n\nhttps://support.discord.com/hc/en-us/articles/1500000368501-Slash-Commands-FAQ\n\nThanks for being a continued supporter of Divibot!";
+                    if (evt.Guild != null) {
+                        await (evt.Author as DiscordMember).SendMessageAsync(new DiscordMessageBuilder() {
+                            Content = content
+                        });
+                    } else {
+                        await client.SendMessageAsync(evt.Channel, new DiscordMessageBuilder() {
+                            Content = content
+                        });
+                    }
+                } catch (Exception e) {
+                    // ...
+                }
+            }
+
             // Check if author is AFK
             EntityAfkUser afkAuthor = dbContext.AfkUsers.SingleOrDefault(u => u.UserId == evt.Author.Id);
             if (afkAuthor != null) {
