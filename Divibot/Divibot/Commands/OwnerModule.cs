@@ -64,6 +64,7 @@ namespace Divibot.Commands {
             });
         }
 
+#if DEBUG
         [SlashCommand("unregisterglobals", "Unregisteres all global commands.")]
         [SlashRequireOwner]
         public async Task UnregisterGlobalsAsync(InteractionContext context) {
@@ -72,6 +73,21 @@ namespace Divibot.Commands {
                 Content = "All global commands unregistered! :thumbsup:"
             });
         }
+
+        [SlashCommand("unregisterdebug", "Unregisteres all debug commands.")]
+        [SlashRequireOwner]
+        public async Task UnregisterDebugAsync(InteractionContext context) {
+            ulong debugGuild = ulong.Parse(Environment.GetEnvironmentVariable("DebugGuild"));
+            await context.Client.BulkOverwriteGuildApplicationCommandsAsync(debugGuild, Array.Empty<DiscordApplicationCommand>());
+            await Task.Delay(1000);
+            if (ulong.TryParse(Environment.GetEnvironmentVariable("DebugGuild2"), out ulong debugGuild2)) {
+                await context.Client.BulkOverwriteGuildApplicationCommandsAsync(debugGuild2, Array.Empty<DiscordApplicationCommand>());
+            }
+            await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                Content = "All debug commands unregistered! :thumbsup:"
+            });
+        }
+#endif
 
     }
 

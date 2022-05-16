@@ -362,13 +362,13 @@ namespace Divibot.Commands {
             await UnyeetUser(channel, member.Id, $"User {member.Username}#{member.Discriminator} ({member.Id}) was automatically un-yeeted since their time has ended.");
         }
 
-        [SlashCommand("lockdown", "Removes everyone's ability to chat in the channel the command was run in.")]
-        [SlashRequireGuild]
-        [SlashRequireUserPermissions(Permissions.ManageChannels)]
-        [SlashRequireBotPermissions(Permissions.ManageChannels)]
-        public async Task LockdownAsync(InteractionContext context, [Option("time", "The amount of time this lockdown should last, if temporary.")] string time = "forever") {
-            // TODO: Complete.
-        }
+        //[SlashCommand("lockdown", "Removes everyone's ability to chat in the channel the command was run in.")]
+        //[SlashRequireGuild]
+        //[SlashRequireUserPermissions(Permissions.ManageChannels)]
+        //[SlashRequireBotPermissions(Permissions.ManageChannels)]
+        //public async Task LockdownAsync(InteractionContext context, [Option("time", "The amount of time this lockdown should last, if temporary.")] string time = "forever") {
+        //    // TODO: Complete.
+        //}
 
         [SlashCommand("cleardms", "Deletes all of the bot's messages in your DMs with it.")]
         [SlashRequireDirectMessage]
