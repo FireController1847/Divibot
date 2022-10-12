@@ -37,8 +37,12 @@ namespace Divibot.Commands {
                 content += $"**>>** Server Join Date: __{(user as DiscordMember).JoinedAt.UtcDateTime.ToString($"dddd, MMMM d, yyyy 'at' h:mm tt, 'UTC'")}__\n";
             }
             content += $"**>>** Creation Date: __{user.CreationTimestamp.UtcDateTime.ToString($"dddd, MMMM d, yyyy 'at' h:mm tt, 'UTC'")}__\n";
-            content += $"**>>** Status: __{user.Presence.Status}__\n";
-            content += $"**>>** Custom Status: __{(user.Presence.Activities.Count > 0 && user.Presence.Activities[0].CustomStatus != null ? user.Presence.Activities[0].CustomStatus.Name : "None")}__\n";
+            if (user.Presence?.Status != null) {
+                content += $"**>>** Status: __{user.Presence.Status}__\n";
+                content += $"**>>** Custom Status: __{(user.Presence.Activities.Count > 0 && user.Presence.Activities[0].CustomStatus != null ? user.Presence.Activities[0].CustomStatus.Name : "None")}__\n";
+            } else {
+                content += $"**>>** Status: __No Status__\n";
+            }
             content += $"**>>** Avatar: {user.GetAvatarUrl(ImageFormat.Auto, 256)}\n";
             if (user is DiscordMember && (user as DiscordMember).GuildAvatarUrl != null) {
                 content += $"**>>** Server Avatar: {(user as DiscordMember).GetGuildAvatarUrl(ImageFormat.Auto, 256)}";

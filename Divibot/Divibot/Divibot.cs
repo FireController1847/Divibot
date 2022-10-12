@@ -2,15 +2,12 @@
 using Divibot.Commands;
 using Divibot.Database;
 using Divibot.Database.Entities;
-using Divibot.Music;
 using DSharpPlus;
-using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 using DSharpPlus.Interactivity;
 using DSharpPlus.Interactivity.Extensions;
-using DSharpPlus.Lavalink;
 using DSharpPlus.Net;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.SlashCommands.Attributes;
@@ -54,7 +51,6 @@ namespace Divibot {
                 .AddSingleton<Random>()
                 .AddDbContext<DivibotDbContext>(ServiceLifetime.Transient)
                 .AddSingleton<AttackService>()
-                .AddSingleton<MusicService>()
                 .BuildServiceProvider();
 
             // Create client
@@ -92,27 +88,11 @@ namespace Divibot {
             // Handle errored slash commands
             commands.SlashCommandErrored += OnSlashCommandErrored;
 
-            // Create LavaLink
-            LavalinkExtension lavalink = client.UseLavalink();
-
             // Start uptime
             Uptime.Start();
 
             // Connect
             await client.ConnectAsync();
-
-            // Connect LavaLink
-            await lavalink.ConnectAsync(new LavalinkConfiguration() {
-                Password = Environment.GetEnvironmentVariable("LavalinkPassword"),
-                RestEndpoint = new ConnectionEndpoint() {
-                    Hostname = "127.0.0.1",
-                    Port = 2333
-                },
-                SocketEndpoint = new ConnectionEndpoint() {
-                    Hostname = "127.0.0.1",
-                    Port = 2333
-                }
-            });
 
             // Create database
             DivibotDbContext dbContext = Services.GetRequiredService<DivibotDbContext>();
@@ -144,7 +124,6 @@ namespace Divibot {
             commands.RegisterCommands<DecodeModule>(guildId);
             commands.RegisterCommands<AttackModule>(guildId);
             commands.RegisterCommands<ModerationModule>(guildId);
-            commands.RegisterCommands<MusicModule>(guildId);
 #else
             commands.RegisterCommands<GeneralModule>();
             commands.RegisterCommands<InfoModule>();
@@ -152,7 +131,6 @@ namespace Divibot {
             commands.RegisterCommands<DecodeModule>();
             commands.RegisterCommands<AttackModule>();
             commands.RegisterCommands<ModerationModule>();
-            commands.RegisterCommands<MusicModule>();
 #endif
         }
 
