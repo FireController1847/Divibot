@@ -76,13 +76,14 @@ namespace Divibot.Commands {
             // Attack!
             string message = $"{context.User.Mention} used {attackType.Name} on {user.Mention}.";
             int gain = 0;
-            if (_random.NextDouble() < (chances.CritChance / 100.0)) {
+            double rand = _random.NextDouble();
+            if (rand < (chances.CritChance / 100.0)) {
                 message += " It was a critical hit!";
                 gain = 2;
-            } else if (_random.NextDouble() < (chances.Chance / 100.0)) {
+            } else if (rand < ((chances.CritChance + chances.Chance) / 100.0)) {
                 message += " The attack was effective!";
                 gain = 1;
-            } else if (_random.NextDouble() < (chances.IneffChance / 100.0)) {
+            } else if (rand < ((chances.CritChance + chances.Chance + chances.IneffChance) / 100.0)) {
                 message += " The attack was ineffective!";
                 gain = 0;
             } else {
@@ -145,10 +146,12 @@ namespace Divibot.Commands {
 
             // Dependency Injection
             private DivibotDbContext _dbContext;
+            private AttackService _attackService;
 
             // Constructor
-            public AttackClassModule(DivibotDbContext dbContext) {
+            public AttackClassModule(DivibotDbContext dbContext, AttackService attackService) {
                 _dbContext = dbContext;
+                _attackService = attackService;
             }
 
             [SlashCommand("score", "Tells you your current attack score.")]
@@ -165,6 +168,119 @@ namespace Divibot.Commands {
                         Content = $"You currently have {attackUser.Score} point{(attackUser.Score != 1 ? "s" : "")}."
                     });
                 }
+            }
+
+            [SlashCommand("strengths", "Tells you your best and worst attack categories.")]
+            public async Task ClassStrengths(InteractionContext context) {
+                // Get the user's class
+                AttackClass attackClass = await _attackService.GetClassForUserAsync(context.User.Id);
+                if (attackClass == null) {
+                    await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                        Content = "It appears as though you don't currently have a class yet. Try running the attack command once first, then check back here!",
+                        IsEphemeral = true
+                    });
+                    return;
+                }
+
+                // Ask if they wanna pay $$$
+                DiscordComponent[] components = new DiscordComponent[] {
+                    new DiscordButtonComponent(ButtonStyle.Primary, "class_strengths_yes", "Yep!"),
+                    new DiscordButtonComponent(ButtonStyle.Danger, "class_strengths_no", "Nope!")
+                };
+                await context.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder() {
+                    Content = "Ah, so you want to know your best and worst categories again, huh? I guess, but it's going to cost ya. Do you have 50 points to spare? (Run /class score to see your current score).",
+                    IsEphemeral = true
+                }.AddComponents(components));
+                DiscordMessage responseMessage = await context.GetOriginalResponseAsync();
+
+                // Wait for response
+                var response = await responseMessage.WaitForButtonAsync(context.User);
+
+                // Handle timeout
+                if (response.TimedOut) {
+                    await InteractionTimedOut(context.Interaction, responseMessage.Id, components);
+                    return;
+                }
+
+                // Handle nevermind
+                if (response.Result.Id == "class_strengths_no") {
+                    await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                        Content = "Whew, alright, glad you let me know before I took them! I swear I wasn't pulling them out of your score already. ... I'll put them back for ya."
+                    });
+                    return;
+                }
+
+                // Get user
+                EntityAttackUser currentUser = _dbContext.AttackUsers.SingleOrDefault(c => c.UserId == context.User.Id);
+                if (currentUser == null) {
+                    // How?
+                    return;
+                }
+
+                // Check for 50 points...
+                if (currentUser.Score < 50) {
+                    await context.DeleteResponseAsync();
+                    await context.Channel.SendMessageAsync(new DiscordMessageBuilder() {
+                        Content = $"Alrighty, {context.User.Mention}! That'll be 50 points... heyy.. hey! Wait! This isn't 50 points! This is 4 copper coins and a piece of string! Who do you think I am? Get out of here! And next time you come, I'm fining you 20 points! (**You lost 20 points.**)"
+                    });
+
+                    // Update score
+                    currentUser.Score -= 20;
+                    _dbContext.AttackUsers.Attach(currentUser);
+                    _dbContext.Entry(currentUser).Property(c => c.Score).IsModified = true;
+
+                    // Save database
+                    await _dbContext.SaveChangesAsync();
+                    return;
+                }
+
+                // Respond
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = "Alrighty! That'll be 50 points from ya. Thank you for your business. Now, let's see.. where did I put that score sheet? (**You lost 50 points.**)"
+                });
+
+                // Update score
+                currentUser.Score -= 50;
+                _dbContext.AttackUsers.Attach(currentUser);
+                _dbContext.Entry(currentUser).Property(c => c.Score).IsModified = true;
+
+                // Save database
+                await _dbContext.SaveChangesAsync();
+
+                // Wait for dramatic effect
+                await Task.Delay(TimeSpan.FromSeconds(2));
+
+                // Find best attack
+                AttackCategory bestCategory = AttackCategory.NICE; // This will never be used.
+                uint bestCategoryChance = uint.MinValue;
+                AttackCategory worstCategory = AttackCategory.NICE; // This will never be used.
+                uint worstCategoryChance = uint.MaxValue;
+                foreach (KeyValuePair<AttackCategory, uint> kvp in attackClass.Chances.ChanceMaxs) {
+                    if (kvp.Value > bestCategoryChance) {
+                        bestCategory = kvp.Key;
+                        bestCategoryChance = kvp.Value;
+                    }
+                }
+                foreach (KeyValuePair<AttackCategory, uint> kvp in attackClass.Chances.ChanceMins) {
+                    if (kvp.Value < worstCategoryChance) {
+                        worstCategory = kvp.Key;
+                        worstCategoryChance = kvp.Value;
+                    }
+                }
+
+                // I found it! I found it!
+                await context.EditResponseAsync(new DiscordWebhookBuilder() {
+                    Content = "Ah! Here it is. I found it for ya."
+                });
+
+                // Wait for more juicy dramatic effect
+                await Task.Delay(TimeSpan.FromSeconds(1));
+
+                // Alright, here you go, I guess.
+                await context.FollowUpAsync(new DiscordFollowupMessageBuilder() {
+                    Content = $"It looks like **your best category is {Divibot.ToProperCase(bestCategory.ToString())} attacks** and **your worst category is {Divibot.ToProperCase(worstCategory.ToString())} attacks**. Huh. Would you look at that. Well, 'till next time! Be safe out there.",
+                    IsEphemeral = true
+                });
             }
 
             [SlashCommand("remove", "Removes your current class.")]
@@ -483,6 +599,11 @@ namespace Divibot.Commands {
                 }
             }
             //context.Client.Logger.LogInformation($"MINSCORE: {minScore}, MAXSCORE: {maxScore}");
+
+            // Increase chances for poor categories
+            if (maxScore < 4) {
+                maxScore = 4;
+            }
 
             // Create the custom chances for each category
             foreach (KeyValuePair<string, int> categoryScore in categoryScores) {
