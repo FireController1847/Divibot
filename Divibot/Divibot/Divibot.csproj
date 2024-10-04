@@ -26,10 +26,4 @@
     <PackageReference Include="TimeSpanParserUtil" Version="1.2.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="DSharpPlus.Lavalink">
-      <HintPath>..\..\..\DSharpPlus\DSharpPlus.Lavalink\bin\Debug\netstandard2.0\DSharpPlus.Lavalink.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
 </Project>
